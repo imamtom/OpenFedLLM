@@ -7,7 +7,9 @@ import json
 from accelerate import Accelerator
 import torch
 from datetime import datetime, timedelta
-
+from huggingface_hub import login
+ 
+# login()
 
 # Define and parse arguments.
 @dataclass
@@ -16,7 +18,7 @@ class FedArguments:
     num_rounds: Optional[int] = field(default=500, metadata={"help": "the number of rounds"})
     num_clients: Optional[int] = field(default=2, metadata={"help": "the number of clients"})
     sample_clients: Optional[int] = field(default=2, metadata={"help": "the number of clients to sample"})
-    split_strategy: Optional[str] = field(default="iid", metadata={"help": "the split strategy"})
+    split_strategy: Optional[str] = field(default="iid", metadata={"help": "the split strategy"}) # 目前只有iid
     prox_mu: Optional[float] = field(default=0.01, metadata={"help": "the mu parameter of FedProx"})
     fedopt_tau: Optional[float] = field(default=1e-3, metadata={"help": "the tau parameter of FedAdagrad, FedYogi and FedAdam"})
     fedopt_eta: Optional[float] = field(default=1e-3, metadata={"help": "the global learning rate parameter of FedAdagrad, FedYogi and FedAdam"})
@@ -65,14 +67,14 @@ class ScriptArguments:
 parser = HfArgumentParser((ScriptArguments, FedArguments))
 script_args, fed_args = parser.parse_args_into_dataclasses()
 
-# ===== Define the LoraConfig =====
+# ===== Define the LoraConfig ===== 如果使用PEFT，则定义LoraConfig
 if script_args.use_peft:
     peft_config = LoraConfig(
-        r=script_args.peft_lora_r,
-        lora_alpha=script_args.peft_lora_alpha,
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM",
+        r=script_args.peft_lora_r, # r (int): Lora attention dimension.
+        lora_alpha=script_args.peft_lora_alpha, # lora_alpha (int): The alpha parameter for Lora scaling.
+        lora_dropout=0.05, # lora_dropout (float): The dropout probability for Lora layers.
+        bias="none", # bias (str): Bias type for Lora. Can be 'none', 'all' or 'lora_only'
+        task_type="CAUSAL_LM", # task_type (str): The task type for the model. Can be 'CAUSAL_LM' or 'MASKED_LM'
     )
 else:
     peft_config = None
@@ -103,14 +105,14 @@ def get_training_args(script_args, new_lr):
 def get_model_config(script_args):
     if script_args.load_in_8bit and script_args.load_in_4bit:
         raise ValueError("You can't load the model in 8 bits and 4 bits at the same time")
-    elif script_args.load_in_8bit:
+    elif script_args.load_in_8bit: # 如果是8bit加载
         quantization_config = BitsAndBytesConfig(
             load_in_8bit=script_args.load_in_8bit
         )
         # Copy the model to each device
         device_map = {"": Accelerator().local_process_index}
         torch_dtype = torch.bfloat16
-    elif script_args.load_in_4bit:
+    elif script_args.load_in_4bit: # 如果是4bit加载
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=script_args.load_in_4bit,
             bnb_4bit_use_double_quant=True,
@@ -124,7 +126,7 @@ def get_model_config(script_args):
         device_map = None
         quantization_config = None
         torch_dtype = None
-    return device_map, quantization_config, torch_dtype
+    return device_map, quantization_config, torch_dtype # quantization_config是BitsAndBytesConfig类的实例, device_map是dict, torch_dtype是torch.dtype
 
 def save_config(script_args, fed_args):
     now_time = (datetime.now()).strftime("%Y%m%d%H%M%S")
@@ -132,7 +134,7 @@ def save_config(script_args, fed_args):
     output_dir = f"{script_args.output_dir}/{dataset_name_split}_{script_args.dataset_sample}_{fed_args.fed_alg}_c{fed_args.num_clients}s{fed_args.sample_clients}_i{script_args.max_steps}_b{script_args.batch_size}a{script_args.gradient_accumulation_steps}_l{script_args.seq_length}_r{script_args.peft_lora_r}a{script_args.peft_lora_alpha}_{now_time}"
     while True:
         if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
+            os.makedirs(output_dir) # 为了创建多级目录
             break
         else:
             now_time = (datetime.now() + timedelta(seconds=1)).strftime("%Y%m%d%H%M%S")

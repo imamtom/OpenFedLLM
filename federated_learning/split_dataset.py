@@ -1,5 +1,6 @@
 import random
 
+# 似乎目前只有iid的split strategy
 def split_dataset(fed_args, script_args, dataset):
     dataset = dataset.shuffle(seed=script_args.seed)        # Shuffle the dataset
     local_datasets = []

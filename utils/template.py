@@ -2,6 +2,7 @@
 To support TRL supervised fine-tuning. Right now, we need to manually set the template here.
 """
 
+# alpaca 的 template
 alpaca_template = """Below is an instruction that describes a task. Write a response that appropriately completes the request.
 
 ### Instruction:
@@ -9,6 +10,7 @@ alpaca_template = """Below is an instruction that describes a task. Write a resp
 
 ### Response: {}{}"""
 
+# vicuna 的 template
 vicuna_template = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: {} ASSISTANT: {}{}"""
 
 TEMPLATE_DICT = {

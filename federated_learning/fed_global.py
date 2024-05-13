@@ -2,14 +2,19 @@ import random
 import torch
 
 def get_clients_this_round(fed_args, round):
-    if (fed_args.fed_alg).startswith('local'):
+    """
+    Get the clients that participate in this round.
+    """
+    if (fed_args.fed_alg).startswith('local'): # 如果是local算法, 则只有一个client参与
         clients_this_round = [int((fed_args.fed_alg)[-1])]
-    else:
-        if fed_args.num_clients < fed_args.sample_clients:
+    else: # 否则, 从num_clients中随机选取sample_clients个client参与
+        if fed_args.num_clients < fed_args.sample_clients: # 如果client数量小于sample_clients, 则所有client都参与
             clients_this_round = list(range(fed_args.num_clients))
-        else:
-            random.seed(round)
-            clients_this_round = sorted(random.sample(range(fed_args.num_clients), fed_args.sample_clients))
+        else: # 否则, 从num_clients中随机选取sample_clients个client参与, 其中seed为round
+            # random.seed(round)
+            # clients_this_round = sorted(random.sample(range(fed_args.num_clients), fed_args.sample_clients))
+            # 这里先固定客户端的顺序, 以便复现
+            clients_this_round = list(range(0, fed_args.sample_clients))
     return clients_this_round
 
 def global_aggregate(fed_args, global_dict, local_dict_list, sample_num_list, clients_this_round, round_idx, proxy_dict=None, opt_proxy_dict=None, auxiliary_info=None):

@@ -24,20 +24,27 @@ dataset = process_sft_dataset(script_args.dataset_name, dataset, script_args.dat
 # ===== Split the dataset into clients =====
 local_datasets = split_dataset(fed_args, script_args, dataset)
 sample_num_list = [len(local_datasets[i]) for i in range(fed_args.num_clients)]
+print('sample_numlist, 每个client分到的sample数量' , sample_num_list)
 
 # ===== Get model config =====
 device_map, quantization_config, torch_dtype = get_model_config(script_args)
 
+"""
+因果语言模型（Causal Language Modeling, CLM）
+因果语言模型是一种特定类型的语言模型，用于生成任务中，强调单词生成的顺序性。在CLM中，模型学习根据前面的单词预测下一个单词，但是不会考虑未来的单词（即它只依赖于已经生成的历史）。这种模型通常用于自回归语言生成模型，如GPT系列。
+
+公式表示：同传统语言模型，但是强调生成的单向性（即因果性），不利用当前单词后面的任何单词。
+"""
 model = AutoModelForCausalLM.from_pretrained(
     script_args.model_name_or_path,
     quantization_config=quantization_config,
     device_map=device_map,
-    trust_remote_code=script_args.trust_remote_code,
+    trust_remote_code=script_args.trust_remote_code, # bool {"help": "Enable `trust_remote_code`"}
     torch_dtype=torch_dtype,
 )
 
 if script_args.load_in_8bit or script_args.load_in_4bit:
-    model = prepare_model_for_kbit_training(
+    model = prepare_model_for_kbit_training( # 该方法用来准备模型以进行kbit训练
                 model, use_gradient_checkpointing=training_args.gradient_checkpointing
             )
 
@@ -46,12 +53,12 @@ model.print_trainable_parameters()
 
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
 
-if training_args.gradient_checkpointing:
+if training_args.gradient_checkpointing: # 如果使用梯度检查点, 默认为True
     model.enable_input_require_grads()
 
 # ===== Define the global and local models =====
 global_dict = copy.deepcopy(get_peft_model_state_dict(model))
-local_dict_list = [copy.deepcopy(global_dict) for i in range(fed_args.num_clients)]
+local_dict_list = [copy.deepcopy(global_dict) for i in range(fed_args.num_clients)] # 复制global_dict, 为每个client创建一个local_dict
 proxy_dict, opt_proxy_dict = get_proxy_dict(fed_args, global_dict)
 global_auxiliary, auxiliary_model_list, auxiliary_delta_dict = get_auxiliary_dict(fed_args, global_dict)
 
@@ -76,7 +83,7 @@ for round in tqdm(range(fed_args.num_rounds)):
     
     for client in range(fed_args.num_clients):
 
-        if client not in clients_this_round:
+        if client not in clients_this_round: # 如果client不在本轮参与的client列表中, 则它的training_loss为-1
             training_loss[client].append(-1)            # -1 is an indicator of not training
             continue
 
@@ -87,6 +94,7 @@ for round in tqdm(range(fed_args.num_rounds)):
         training_args = get_training_args(script_args, new_lr)
 
         # ===== Train local model on the client side =====
+        # client端的trainer
         trainer = get_fed_local_sft_trainer(
             model=model,
             tokenizer=tokenizer,
@@ -100,7 +108,7 @@ for round in tqdm(range(fed_args.num_rounds)):
             local_auxiliary=auxiliary_model_list[client],
             global_auxiliary=global_auxiliary,
         )
-
+        # 训练 并返回结果, 结果中包含training_loss
         results = trainer.train()
         training_loss[client].append(results.training_loss)
 
@@ -118,7 +126,7 @@ for round in tqdm(range(fed_args.num_rounds)):
     )
     set_peft_model_state_dict(model, global_dict)   # Update global model
 
-    # ===== Save the model =====
+    # ===== Save the model ===== 当round+1是save_model_freq的倍数时, 保存模型
     if (round+1) % fed_args.save_model_freq == 0:
         trainer.save_model(os.path.join(script_args.output_dir, f"checkpoint-{round+1}"))
     
