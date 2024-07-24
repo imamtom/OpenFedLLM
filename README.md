@@ -10,16 +10,20 @@ OpenFedLLM includes the following key features:
 
 ![intro](doc/assets/openfedllm-intro.png)
 
+## News🔥
+- **2024-06:** We released the first realistic benchmark for FedLLM: FedLLM-Bench. Check the [Paper](https://arxiv.org/pdf/2406.04845) | [Code](https://github.com/rui-ye/FedLLM-Bench).
 
 ## Setup
 
-Clone the repo and install the required packages.
+Clone the repo, submodules and install the required packages.
+
 ```
-git clone https://github.com/rui-ye/OpenFedLLM.git
+git clone --recursive --shallow-submodules https://github.com/rui-ye/OpenFedLLM.git
 cd OpenFedLLM
 conda create -n fedllm python=3.10
 conda activate fedllm
 pip install -r requirements.txt
+source setup.sh
 ```
 
 ## Training
