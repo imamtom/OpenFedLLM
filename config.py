@@ -49,7 +49,7 @@ class ScriptArguments:
     peft_lora_alpha: Optional[int] = field(default=16, metadata={"help": "the alpha parameter of the LoRA adapters"})
     logging_steps: Optional[int] = field(default=100, metadata={"help": "the number of logging steps"})
     use_auth_token: Optional[bool] = field(default=False, metadata={"help": "Use HF auth token to access the model"})   # token and use_auth_token cannot be used together
-    num_train_epochs: Optional[int] = field(default=3, metadata={"help": "the number of training epochs"})
+    num_train_epochs: Optional[int] = field(default=3, metadata={"help": "the number of training epochs"}) # 数据集被遍历的次数
     max_steps: Optional[int] = field(default=10, metadata={"help": "the number of training steps"})
     save_steps: Optional[int] = field(
         default=1000, metadata={"help": "Number of updates steps before two checkpoint saves"}
@@ -81,16 +81,35 @@ else:
 
 def get_config():
     return script_args, fed_args, peft_config
-
+from trl import DPOConfig
+# ===== Define the training arguments =====
+# def get_training_args(script_args, new_lr):
+#     training_args = TrainingArguments(
+#         output_dir=script_args.output_dir,
+#         per_device_train_batch_size=script_args.batch_size,
+#         gradient_accumulation_steps=script_args.gradient_accumulation_steps,
+#         learning_rate=new_lr,
+#         logging_steps=script_args.logging_steps,
+#         num_train_epochs=script_args.num_train_epochs,
+#         max_steps=script_args.max_steps,
+#         report_to=script_args.log_with,
+#         save_steps=script_args.save_steps,
+#         save_total_limit=script_args.save_total_limit,
+#         push_to_hub=script_args.push_to_hub,
+#         hub_model_id=script_args.hub_model_id,
+#         gradient_checkpointing=script_args.gradient_checkpointing,
+#         lr_scheduler_type="constant",
+#     )
+#     return training_args
 # ===== Define the training arguments =====
 def get_training_args(script_args, new_lr):
-    training_args = TrainingArguments(
+    training_args = DPOConfig(
         output_dir=script_args.output_dir,
         per_device_train_batch_size=script_args.batch_size,
         gradient_accumulation_steps=script_args.gradient_accumulation_steps,
         learning_rate=new_lr,
         logging_steps=script_args.logging_steps,
-        num_train_epochs=script_args.num_train_epochs,
+        num_train_epochs=script_args.num_train_epochs, # max_steps和num_train_epochs 相比，只能有一个生效, 优先级是max_steps > num_train_epochs
         max_steps=script_args.max_steps,
         report_to=script_args.log_with,
         save_steps=script_args.save_steps,
@@ -99,9 +118,11 @@ def get_training_args(script_args, new_lr):
         hub_model_id=script_args.hub_model_id,
         gradient_checkpointing=script_args.gradient_checkpointing,
         lr_scheduler_type="constant",
+        remove_unused_columns=False,
+        max_prompt_length = 128,
+        max_length = 512,
     )
     return training_args
-
 def get_model_config(script_args):
     if script_args.load_in_8bit and script_args.load_in_4bit:
         raise ValueError("You can't load the model in 8 bits and 4 bits at the same time")

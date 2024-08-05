@@ -5,7 +5,7 @@ from .fed_local_sft import SCAFFOLD_Callback
 
 def get_fed_local_dpo_trainer(script_args, fed_args, model, model_ref, tokenizer, training_args, local_dataset, global_dict, local_auxiliary, global_auxiliary):
     
-    if fed_args.fed_alg == 'fedprox':
+    if fed_args.fed_alg == 'fedprox': # FedProx 通过引入Proximal Term来限制本地模型更新的幅度，适用于处理数据异质性和客户端计算能力差异。
         trainer = DPOTrainerFedProx(
                             model=model,
                             ref_model=model_ref,
@@ -16,7 +16,7 @@ def get_fed_local_dpo_trainer(script_args, fed_args, model, model_ref, tokenizer
                             global_state=global_dict,
                             prox_mu=fed_args.prox_mu,
                             )
-    elif fed_args.fed_alg == 'scaffold':
+    elif fed_args.fed_alg == 'scaffold': # SCAFFOLD 通过使用控制变量校正本地更新方向，减少局部模型与全局模型间的偏差，改进了收敛速度和模型性能。
         trainer = DPOTrainerSCAFFOLD(
                             model=model,
                             ref_model=model_ref,
@@ -36,7 +36,7 @@ def get_fed_local_dpo_trainer(script_args, fed_args, model, model_ref, tokenizer
                             args=training_args,
                             beta=script_args.dpo_beta,
                             train_dataset=local_dataset,
-                            tokenizer=tokenizer,
+                            tokenizer=tokenizer, # local无需global_state=global_dict,
                             )
     return trainer
 

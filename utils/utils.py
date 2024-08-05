@@ -2,6 +2,7 @@ import math
 
 def cosine_learning_rate(current_round, total_rounds, initial_lr=0.001, min_lr=0):
     """
+    使用余弦调度来计算当前训练轮次的学习率。这种调度方式在训练过程中逐步降低学习率
     Compute the learning rate based on a cosine schedule.
 
     :param current_round: The current training round (0-indexed).
@@ -17,7 +18,7 @@ def cosine_learning_rate(current_round, total_rounds, initial_lr=0.001, min_lr=0
 
 if __name__ == "__main__":
 
-    # Example usage:
+    # Example usage: 运行这个程序可以看到每一轮的学习率
     num_rounds = 300
     initial_lr = 5e-5
     min_lr = 1e-6

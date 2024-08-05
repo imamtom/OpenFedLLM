@@ -93,7 +93,7 @@ class SFTTrainerSCAFFOLD(SFTTrainer):
                     continue
                 else:
                     name = name.replace(".default", "")
-                    auxiliary_new_para[name] = (self.global_state[name] - param) / (self.args.max_steps * self.args.learning_rate) - self.correction[name]
+                    auxiliary_new_para[name] = (self.global_state[name] - param) / (self.args.max_steps * self.args.learning_rate) - self.correction[name] # auxiliary_new_para的计算方式是根据param和global_state的差值计算的
                     auxiliary_delta_para[name] = auxiliary_new_para[name] - self.local_auxiliary[name]
         return auxiliary_new_para, auxiliary_delta_para
 
