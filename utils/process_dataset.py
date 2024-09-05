@@ -16,8 +16,11 @@ def get_dataset(dataset_name, local_data_dir=None):
         dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
         dataset = load_dataset(dataset_name, split="train_sft")
     else:
-        dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
-        dataset = load_dataset(dataset_name, split="train")
+        # dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
+        # dataset = load_dataset(dataset_name, split="train")
+        from datasets import load_from_disk
+        print(f"Loading dataset from {local_data_dir}")
+        dataset = load_from_disk(local_data_dir)
 
     return dataset
 
@@ -69,7 +72,15 @@ def process_dpo_dataset(dataset_name, dataset, template_name, dataset_sample):
     elif dataset_name in ["HuggingFaceH4/ultrafeedback_binarized"]:
         dataset = dataset.map(partial(split_ultrafeedback, template_name=template_name), load_from_cache_file=False)
         dataset = dataset.remove_columns(['prompt_id', 'messages', 'score_chosen', 'score_rejected'])
-    
+    elif template_name == "none":
+        print('Warning', '='*50)
+        print(f"Dataset from {dataset_name} no need to processed.")
+    else:
+        print('Warning', '='*50)
+        print(f"Dataset from {dataset_name} does not being processed.")
+        dataset = dataset.map(partial(split_beavertail, template_name=template_name), load_from_cache_file=False)
+
+
     dataset = dataset.shuffle(seed=2023)
     if dataset_sample:
         num_sample = min(len(dataset), dataset_sample)
@@ -89,15 +100,16 @@ def find_common_prefix(str1, str2):
             break
     return prefix
 
-def split_ultrafeedback(example, template_name="vicuna_v1.1"):
+def split_beavertail(example, template_name="alpaca"):
     conv_template = get_conv_template(template_name)
 
     conv_template.append_message(conv_template.roles[0], example["prompt"])
     conv_template.append_message(conv_template.roles[1], None)
     example["prompt"] = conv_template.get_prompt()
-    example["chosen"] = " " + example["chosen"][1]["content"]       # There might need a space in the front.
-    example["rejected"] = " " + example["rejected"][1]["content"]
+    example["chosen"] = example["chosen"]
+    example["rejected"] = example["rejected"]
     return example
+
 
 def split_hh(example, template_name="vicuna_v1.1"):
     common_prefix = find_common_prefix(example["chosen"], example["rejected"])
@@ -130,4 +142,15 @@ def split_hh(example, template_name="vicuna_v1.1"):
     example["prompt"] = conv_template.get_prompt()
     example["chosen"] = example["chosen"][len(common_prefix) - 1 :]     # -1 to include the space in the front.
     example["rejected"] = example["rejected"][len(common_prefix) - 1 :]
+    return example
+
+
+def split_ultrafeedback(example, template_name="vicuna_v1.1"):
+    conv_template = get_conv_template(template_name)
+
+    conv_template.append_message(conv_template.roles[0], example["prompt"])
+    conv_template.append_message(conv_template.roles[1], None)
+    example["prompt"] = conv_template.get_prompt()
+    example["chosen"] = " " + example["chosen"][1]["content"]       # There might need a space in the front.
+    example["rejected"] = " " + example["rejected"][1]["content"]
     return example

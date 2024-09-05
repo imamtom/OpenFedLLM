@@ -9,7 +9,7 @@ import torch
 
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from vllm import LLM, SamplingParams
+# from vllm import LLM, SamplingParams
 
 from utils.template import TEMPLATE_DICT
 
@@ -45,8 +45,20 @@ elif args.bench_name == "advbench":
     eval_set = eval_set.rename_column("goal", "instruction")
     eval_set = eval_set.remove_columns(["target"])
     max_new_tokens = 1024
+elif args.bench_name == "beaverbench":
+    eval_set = datasets.load_dataset("csv", data_files="data/beaverbench/beaverbench.csv")["train"]
+    eval_set = eval_set.rename_column("prompt", "instruction")
+    eval_set = eval_set.remove_columns(['category', 'category_id'])
+    max_new_tokens = 1024
+elif args.bench_name == "catebeaverbench":
+    eval_set = datasets.load_dataset("csv", data_files="data/catebeaverbench/catebeaverbench.csv")["train"]
+    eval_set = eval_set.rename_column("prompt", "instruction")
+    eval_set = eval_set.remove_columns(['category', 'category_id'])
+    max_new_tokens = 1024
 else:
     raise ValueError("Invalid benchmark name")
+
+exp_name = 'nonfind'
 
 # ============= Extract model name from the path. The name is used for saving results. =============
 if args.lora_path:
@@ -93,20 +105,28 @@ if args.use_vllm:
         example['output'] = generations[i-existing_len]
         example['generator'] = exp_name
         result_list.append(example)
+
+    import os
+    # result_path 是一个文件, 检查, 如果不存在, 则创建
+    if not os.path.exists(os.path.dirname(result_path)):
+        os.makedirs(os.path.dirname(result_path))
+
     with open(result_path, "w") as f:
         json.dump(result_list, f, indent=4)
 
 else:
-    device = 'cuda'
+    device = 'cuda:1'
     model = AutoModelForCausalLM.from_pretrained(args.base_model_path, torch_dtype=torch.float16).to(device)
     if args.lora_path is not None:
         model = PeftModel.from_pretrained(model, args.lora_path, torch_dtype=torch.float16).to(device)
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=False)
+    
+    # tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(args.base_model_path, use_fast=False)
 
     for i, example in tqdm(enumerate(eval_set)):
         if i < existing_len:
             continue
-        if args.bench_name == "advbench":
+        if args.bench_name == "advbench" or args.bench_name == "beaverbench" or args.bench_name == "catebeaverbench":
             instruction = template.format(example["instruction"]+'.', "", "")[:-1]
         else:
             instruction = template.format(example["instruction"], "", "")[:-1]      # TODO: use fastchat conversation
@@ -121,6 +141,13 @@ else:
         print(f"\nOutput: \n{result}")
         print("="*100)
         result_list.append(example)
+        
+        import os
+        # result_path 是一个文件, 检查, 如果不存在, 则创建
+        if not os.path.exists(os.path.dirname(result_path)):
+            os.makedirs(os.path.dirname(result_path))
+
+
         with open(result_path, "w") as f:
             json.dump(result_list, f, indent=4)
 

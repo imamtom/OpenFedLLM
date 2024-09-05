@@ -15,7 +15,7 @@ import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_answer", type=str, default=None, help="file name")
-parser.add_argument("--judger", type=str, default='gpt-4')
+parser.add_argument("--judger", type=str, default='gpt-4o')
 args = parser.parse_args()
 
 response_path = f"./data/vicuna/model_answer/{args.model_answer}.json"
@@ -95,7 +95,7 @@ for output in model_outputs:
     ]
 
     response = completion(messages, args)
-
+    print('response', response)
     record_sample = {}
     record_sample["for_judge"] = current_prompt
     record_sample["response"] = response["choices"][0]["message"]["content"]
@@ -104,6 +104,8 @@ for output in model_outputs:
 
     print("="*50, count, "="*50)
     print(record_sample["response"])
-
+    # 判断save_path是否存在, 如果不存在, 则创建
+    if not os.path.exists(os.path.dirname(save_path)):
+        os.makedirs(os.path.dirname(save_path))
     with open(save_path, "w") as f:
         json.dump(judge_list, f, indent=4)

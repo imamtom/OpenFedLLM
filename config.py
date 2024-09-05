@@ -33,8 +33,8 @@ class ScriptArguments:
     dataset_name: Optional[str] = field(
         default="lucasmccabe-lmi/CodeAlpaca-20k", metadata={"help": "the dataset name"}
     )
-    log_with: Optional[str] = field(default="none", metadata={"help": "use 'wandb' to log with wandb"})
-    learning_rate: Optional[float] = field(default=2e-5, metadata={"help": "the learning rate"})    # vicuna and alpaca use 2e-5
+    log_with: Optional[str] = field(default="wandb", metadata={"help": "use 'wandb' to log with wandb"})
+    learning_rate: Optional[float] = field(default=2e-5, metadata={"help": "the initial learning rate"})    # vicuna and alpaca use 2e-5
     batch_size: Optional[int] = field(default=16, metadata={"help": "the batch size"})
     seq_length: Optional[int] = field(default=512, metadata={"help": "Input sequence length"})
     gradient_accumulation_steps: Optional[int] = field(
@@ -65,8 +65,10 @@ class ScriptArguments:
     local_data_dir: Optional[str] = field(default=None, metadata={"help": "the local data directory if you want to use downloaded data"})
 
 parser = HfArgumentParser((ScriptArguments, FedArguments))
-script_args, fed_args = parser.parse_args_into_dataclasses()
-
+script_args, fed_args = parser.parse_args_into_dataclasses() # # 从命令行解析参数, 返回的是一个元组, 元组中的元素是dataclass的实例
+# 打印local_data_dir
+print('========================local_data_dir========================')
+print(script_args.local_data_dir)
 # ===== Define the LoraConfig ===== 如果使用PEFT，则定义LoraConfig
 if script_args.use_peft:
     peft_config = LoraConfig(
@@ -82,6 +84,7 @@ else:
 def get_config():
     return script_args, fed_args, peft_config
 from trl import DPOConfig
+from trl import SFTConfig
 # ===== Define the training arguments =====
 # def get_training_args(script_args, new_lr):
 #     training_args = TrainingArguments(
@@ -101,13 +104,12 @@ from trl import DPOConfig
 #         lr_scheduler_type="constant",
 #     )
 #     return training_args
-# ===== Define the training arguments =====
-def get_training_args(script_args, new_lr):
+# ===== Define the training arguments of DPO =====
+def get_training_args_dpo(script_args, new_lr):
     training_args = DPOConfig(
         output_dir=script_args.output_dir,
         per_device_train_batch_size=script_args.batch_size,
         gradient_accumulation_steps=script_args.gradient_accumulation_steps,
-        learning_rate=new_lr,
         logging_steps=script_args.logging_steps,
         num_train_epochs=script_args.num_train_epochs, # max_steps和num_train_epochs 相比，只能有一个生效, 优先级是max_steps > num_train_epochs
         max_steps=script_args.max_steps,
@@ -121,8 +123,33 @@ def get_training_args(script_args, new_lr):
         remove_unused_columns=False,
         max_prompt_length = 128,
         max_length = 512,
+        learning_rate=new_lr,
     )
     return training_args
+
+# ===== Define the training arguments of SFT =====
+def get_training_args_sft(script_args, new_lr):
+    training_args = SFTConfig(
+        output_dir=script_args.output_dir,
+        per_device_train_batch_size=script_args.batch_size,
+        gradient_accumulation_steps=script_args.gradient_accumulation_steps,
+        logging_steps=script_args.logging_steps,
+        num_train_epochs=script_args.num_train_epochs, # max_steps和num_train_epochs 相比，只能有一个生效, 优先级是max_steps > num_train_epochs
+        max_steps=script_args.max_steps,
+        report_to=script_args.log_with,
+        save_steps=script_args.save_steps,
+        save_total_limit=script_args.save_total_limit,
+        push_to_hub=script_args.push_to_hub,
+        hub_model_id=script_args.hub_model_id,
+        gradient_checkpointing=script_args.gradient_checkpointing,
+        lr_scheduler_type="constant",
+        remove_unused_columns=False,
+        max_prompt_length = 128,
+        max_length = 512,
+        learning_rate=new_lr,
+    )
+    return training_args
+
 def get_model_config(script_args):
     if script_args.load_in_8bit and script_args.load_in_4bit:
         raise ValueError("You can't load the model in 8 bits and 4 bits at the same time")

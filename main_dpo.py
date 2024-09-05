@@ -13,20 +13,38 @@ from peft import get_peft_model, get_peft_model_state_dict, set_peft_model_state
 
 from utils import *
 from federated_learning import *
-from config import get_config, save_config, get_model_config, get_training_args
+from config import get_config, save_config, get_model_config, get_training_args_dpo
 
 # ===== Define the arguments =====
 script_args, fed_args, peft_config = get_config()
-training_args = get_training_args(script_args, script_args.learning_rate)
+training_args = get_training_args_dpo(script_args, script_args.learning_rate)
 save_config(script_args, fed_args)
 print(script_args, fed_args)
 
 # ===== Load the dataset =====
+print(f">> ==================== Load Directory {script_args.local_data_dir} ====================")
+print(f">> ==================== Load Dataset {script_args.dataset_name} ====================")
 dataset = get_dataset(script_args.dataset_name, script_args.local_data_dir)
 dataset = process_dpo_dataset(script_args.dataset_name, dataset, script_args.template, script_args.dataset_sample)
 
 # ===== Split the dataset into clients =====
 local_datasets = split_dataset(fed_args, script_args, dataset)
+# 输出local_datasets的内容
+print('客户端0 的dataset', local_datasets[0])
+print('客户端0 的dataset的第0个元素', local_datasets[0][0])
+
+# 确认local_datasets[0] 中是否包含 category 字段
+if 'category' in local_datasets[0].column_names:
+    print('数据集中包含 category 字段')
+    for i in range(fed_args.num_clients):
+        print(f'client {i} 的数据集中每个category的数量:')
+        # 统计local_datasets[0] 中 category 字段的值的分布
+        categories =  local_datasets[i].unique('category')
+        # 统计每个category的数量
+        for category in categories:
+            print(f'category: {category}, count: {len(local_datasets[i].filter(lambda x: x["category"] == category))}')
+
+
 sample_num_list = [len(local_datasets[i]) for i in range(fed_args.num_clients)]
 
 # ===== Get model config =====
@@ -35,7 +53,8 @@ device_map, quantization_config, torch_dtype = get_model_config(script_args)
 model = AutoModelForCausalLM.from_pretrained(
     script_args.model_name_or_path, # 默认 default="meta-llama/Llama-2-7b-hf"
     quantization_config=quantization_config,
-    device_map=device_map,
+    # device_map=device_map,
+    device_map = 'auto', # "help": "Device map for model and data", 默认是auto
     trust_remote_code=script_args.trust_remote_code,
     torch_dtype=torch_dtype,
 )
@@ -48,7 +67,8 @@ else:
     model_ref = AutoModelForCausalLM.from_pretrained(
         script_args.model_name_or_path,
         quantization_config=quantization_config,
-        device_map=device_map,
+        # device_map=device_map,
+        device_map = 'auto',
         trust_remote_code=script_args.trust_remote_code,
         torch_dtype=torch_dtype,
     )
@@ -99,8 +119,9 @@ for round in tqdm(range(fed_args.num_rounds)):
         set_peft_model_state_dict(model, global_dict)   # sync the global model to the local model # 将global_dict的参数同步到 id为client的 local model
         # 从local_datasets中获取id为client的dataset
         sub_dataset = get_dataset_this_round(local_datasets[client], round, fed_args, script_args)      # get the required sub-dataset for this round
-        new_lr = cosine_learning_rate(round, fed_args.num_rounds, script_args.learning_rate, 1e-5)      # manually schedule the learning rate
-        training_args = get_training_args(script_args, new_lr)
+        # 依次传入 当前轮数, 总轮数, 初始学习率, 最小学习率
+        new_lr = cosine_learning_rate(round, fed_args.num_rounds, script_args.learning_rate, 2e-7)      # manually schedule the learning rate
+        training_args = get_training_args_dpo(script_args, new_lr)
 
         # ===== Train local model on the client side =====
         trainer = get_fed_local_dpo_trainer( # 根据fed_args返回不同的trainer
