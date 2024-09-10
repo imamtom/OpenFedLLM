@@ -13,9 +13,13 @@ alpaca_template = """Below is an instruction that describes a task. Write a resp
 # vicuna 的 template
 vicuna_template = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: {} ASSISTANT: {}{}"""
 
+# vicuna_normal 的 template
+vicuna_normal_template = """USER: {} ASSISTANT: {}{}"""
+
 TEMPLATE_DICT = {
     'alpaca': (alpaca_template, '\n### Response:'),
     'vicuna': (vicuna_template, ' ASSISTANT:'),
+    'vicuna_normal': (vicuna_normal_template, ' ASSISTANT:')
 }
 
 

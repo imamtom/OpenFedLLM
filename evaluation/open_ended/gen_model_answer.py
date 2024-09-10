@@ -19,12 +19,15 @@ parser.add_argument("--lora_path", type=str, default=None)
 parser.add_argument("--template", type=str, default="alpaca")
 parser.add_argument("--use_vllm", action="store_true")
 parser.add_argument("--bench_name", type=str, default="vicuna")
+parser.add_argument("--gpu", type=int, default=0)
+parser.add_argument("--category_prefix", action='store_true', help="If provided, set category_prefix to True")
+
 args = parser.parse_args()
 print(args)
 
 if args.use_vllm and args.lora_path is not None:
     raise ValueError("Cannot use both VLLM and LORA, need to merge the lora and then use VLLM")
-
+    # 如果同时使用了VLLM, 且lora_path不为空, 则抛出异常
 template = TEMPLATE_DICT[args.template][0]
 print(f">> You are using template: {template}")
 
@@ -55,6 +58,16 @@ elif args.bench_name == "catebeaverbench":
     eval_set = eval_set.rename_column("prompt", "instruction")
     eval_set = eval_set.remove_columns(['category', 'category_id'])
     max_new_tokens = 1024
+elif args.bench_name == "vicunacatebeaverbench":
+    eval_set = datasets.load_dataset("csv", data_files="data/vicunacatebeaverbench/vicunacatebeaverbench.csv")['train']
+    eval_set = eval_set.rename_column("prompt", "instruction")
+    eval_set = eval_set.remove_columns(['category_id'])
+    max_new_tokens = 1024
+elif args.bench_name == "minibeaverbench":
+    eval_set = datasets.load_dataset("csv", data_files="data/minibeaverbench/minibeavertails_10per_validation.csv")['train']
+    eval_set = eval_set.rename_column("prompt", "instruction")
+    eval_set = eval_set.remove_columns(['category_id'])
+    max_new_tokens = 1024
 else:
     raise ValueError("Invalid benchmark name")
 
@@ -76,7 +89,14 @@ else:
         model_name = last_str                       # mainly for base model
 
 # ============= Load previous results if exists =============
-result_path = f"./data/{args.bench_name}/model_answer/{model_name}.json"
+if not args.category_prefix:
+    result_path = f"./data/{args.bench_name}/model_answer/{model_name}.json"
+else:
+    result_path = f"./data/{args.bench_name}/model_answer_category_prefix/{model_name}.json"
+
+print("="*100)
+print("你正在尝试写入到如下文件:")
+print(f">> Result path: {result_path}")
 
 if os.path.exists(result_path):
     with open(result_path, "r") as f:
@@ -115,7 +135,7 @@ if args.use_vllm:
         json.dump(result_list, f, indent=4)
 
 else:
-    device = 'cuda:1'
+    device = 'cuda:{}'.format(args.gpu) if torch.cuda.is_available() else 'cpu'
     model = AutoModelForCausalLM.from_pretrained(args.base_model_path, torch_dtype=torch.float16).to(device)
     if args.lora_path is not None:
         model = PeftModel.from_pretrained(model, args.lora_path, torch_dtype=torch.float16).to(device)
@@ -126,8 +146,10 @@ else:
     for i, example in tqdm(enumerate(eval_set)):
         if i < existing_len:
             continue
-        if args.bench_name == "advbench" or args.bench_name == "beaverbench" or args.bench_name == "catebeaverbench":
-            instruction = template.format(example["instruction"]+'.', "", "")[:-1]
+        if args.category_prefix and example['category'] is not None:
+            example['instruction'] = f"Category: {example['category']}. {example['instruction']}"
+        if args.bench_name == "advbench" or args.bench_name == "beaverbench" or args.bench_name == "catebeaverbench" or args.bench_name == "vicunacatebeaverbench" or args.bench_name == "minibeaverbench":  
+            instruction = template.format(example["instruction"], "", "")[:-1]
         else:
             instruction = template.format(example["instruction"], "", "")[:-1]      # TODO: use fastchat conversation
         input_ids = tokenizer.encode(instruction, return_tensors="pt").to(device)

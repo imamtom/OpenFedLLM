@@ -38,8 +38,10 @@ if __name__ == "__main__":
         default=None,
         help="A list of judge results to be calculated",
     )
+    parser.add_argument("--judger", type=str, default='gpt-4o')
     args = parser.parse_args()
 
     for eval_name in args.eval_list:
+        eval_name = args.judger + "_" + eval_name
         file_path = f"./data/vicuna/model_judgment/{eval_name}.json"
         get_socres(file_path)
